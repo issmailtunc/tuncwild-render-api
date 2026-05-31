@@ -1,0 +1,14 @@
+{
+  "name": "tuncwild-render-api",
+  "version": "1.0.0",
+  "description": "Simple FFmpeg render API for TUNC WILD videos",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.3",
+    "uuid": "^9.0.1"
+  }
+}

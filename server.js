@@ -43,6 +43,7 @@ function getBaseUrl(req) {
 
 function cleanText(value) {
   if (typeof value !== "string") return "";
+
   return value
     .replace(/\r/g, "")
     .replace(/\n/g, " ")
@@ -53,17 +54,18 @@ function cleanText(value) {
 function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) {
   const filters = [];
 
+  // Alpine Linux + ttf-dejavu font path
   const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
-  
+
   if (textTop) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.052,54)':box=1:boxcolor=black@0.45:boxborderw=18:x=(w-text_w)/2:y=h*0.66`
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.075,78)':box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:y=h*0.58`
     );
   }
 
   if (textBottom) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='min(h*0.044,46)':box=1:boxcolor=black@0.45:boxborderw=16:x=(w-text_w)/2:y=h*0.74`
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='min(h*0.062,66)':box=1:boxcolor=black@0.55:boxborderw=20:x=(w-text_w)/2:y=h*0.68`
     );
   }
 
@@ -145,7 +147,7 @@ app.get("/", (req, res) => {
 /**
  * Eski sistem:
  * videoUrl + musicUrl ile çalışır.
- * Bu endpoint de artık textTop / textBottom destekler.
+ * Bu endpoint textTop / textBottom destekler.
  */
 app.post("/render", async (req, res) => {
   const {
@@ -208,8 +210,8 @@ app.post("/render", async (req, res) => {
  * - video: MP4 dosyası
  * - musicUrl: müzik linki
  * - musicVolume: 0.35
- * - textTop: İngilizce üst yazı
- * - textBottom: Türkçe alt yazı
+ * - textTop: İngilizce yazı
+ * - textBottom: Türkçe yazı
  */
 app.post("/render-upload", upload.single("video"), async (req, res) => {
   const {

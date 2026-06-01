@@ -51,25 +51,32 @@ function cleanText(value) {
     .slice(0, 120);
 }
 
-function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) {
-  const filters = [];
+function buildTextBlock(textTop, textBottom) {
+  const safeTextTop = cleanText(textTop);
+  const safeTextBottom = cleanText(textBottom);
+
+  if (safeTextTop && safeTextBottom) {
+    return `${safeTextTop}\n${safeTextBottom}`;
+  }
+
+  if (safeTextTop) return safeTextTop;
+  if (safeTextBottom) return safeTextBottom;
+
+  return "";
+}
+
+function buildVideoFilter({ textBlock, textBlockFile }) {
+  if (!textBlock) {
+    return "null";
+  }
 
   // Alpine Linux + ttf-dejavu font path
   const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
-  if (textTop) {
-    filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.075,78)':box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:y=h*0.60`
-    );
-  }
-
-  if (textBottom) {
-    filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='min(h*0.062,66)':box=1:boxcolor=black@0.55:boxborderw=20:x=(w-text_w)/2:y=h*0.67`
-    );
-  }
-
-  return filters.length > 0 ? filters.join(",") : "null";
+  return [
+    "drawbox=x=w*0.07:y=h*0.56:w=w*0.86:h=h*0.17:color=black@0.52:t=fill",
+    `drawtext=fontfile='${fontFile}':textfile='${textBlockFile}':fontcolor=white:fontsize='min(h*0.056,60)':line_spacing=14:x=(w-text_w)/2:y=h*0.595`
+  ].join(",");
 }
 
 async function processRender({
@@ -82,18 +89,12 @@ async function processRender({
   id
 }) {
   const musicPath = path.join(WORK_DIR, `${id}-music.mp3`);
-  const textTopFile = path.join(WORK_DIR, `${id}-text-top.txt`);
-  const textBottomFile = path.join(WORK_DIR, `${id}-text-bottom.txt`);
+  const textBlockFile = path.join(WORK_DIR, `${id}-text-block.txt`);
 
-  const safeTextTop = cleanText(textTop);
-  const safeTextBottom = cleanText(textBottom);
+  const textBlock = buildTextBlock(textTop, textBottom);
 
-  if (safeTextTop) {
-    fs.writeFileSync(textTopFile, safeTextTop, "utf8");
-  }
-
-  if (safeTextBottom) {
-    fs.writeFileSync(textBottomFile, safeTextBottom, "utf8");
+  if (textBlock) {
+    fs.writeFileSync(textBlockFile, textBlock, "utf8");
   }
 
   try {
@@ -105,10 +106,8 @@ async function processRender({
     ]);
 
     const videoFilter = buildVideoFilter({
-      textTop: safeTextTop,
-      textBottom: safeTextBottom,
-      textTopFile,
-      textBottomFile
+      textBlock,
+      textBlockFile
     });
 
     await runCommand("ffmpeg", [
@@ -130,8 +129,7 @@ async function processRender({
       outputPath
     ]);
   } finally {
-    if (fs.existsSync(textTopFile)) fs.unlinkSync(textTopFile);
-    if (fs.existsSync(textBottomFile)) fs.unlinkSync(textBottomFile);
+    if (fs.existsSync(textBlockFile)) fs.unlinkSync(textBlockFile);
     if (fs.existsSync(musicPath)) fs.unlinkSync(musicPath);
   }
 }

@@ -75,13 +75,13 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
 
   if (textTop) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=78:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62:${textEnable}`
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=92:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:y=h*0.60:${textEnable}`
     );
   }
 
   if (textBottom) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=62:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62+90:${textEnable}`
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=72:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:y=h*0.60+108:${textEnable}`
     );
   }
 
@@ -150,7 +150,7 @@ async function processRender({
       "-map", "[a]",
       "-c:v", "libx264",
       "-preset", "veryfast",
-      "-crf", "23",
+      "-crf", "20",
       "-pix_fmt", "yuv420p",
       "-c:a", "aac",
       "-b:a", "192k",

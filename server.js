@@ -22,7 +22,7 @@ const upload = multer({
 
 function runCommand(command, args) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { timeout: 600000 }, (error, stdout, stderr) => {
+    execFile(command, args, { timeout: 900000 }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(stderr || error.message));
         return;
@@ -41,6 +41,99 @@ function getBaseUrl(req) {
   return `${req.protocol}://${req.get("host")}`;
 }
 
+function cleanText(value) {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/\r/g, "")
+    .replace(/\n/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) {
+  const filters = [];
+
+  const fontFile = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+
+  if (textTop) {
+    filters.push(
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.052,54)':box=1:boxcolor=black@0.45:boxborderw=18:x=(w-text_w)/2:y=h*0.66`
+    );
+  }
+
+  if (textBottom) {
+    filters.push(
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='min(h*0.044,46)':box=1:boxcolor=black@0.45:boxborderw=16:x=(w-text_w)/2:y=h*0.74`
+    );
+  }
+
+  return filters.length > 0 ? filters.join(",") : "null";
+}
+
+async function processRender({
+  inputVideo,
+  musicUrl,
+  musicVolume,
+  textTop,
+  textBottom,
+  outputPath,
+  id
+}) {
+  const musicPath = path.join(WORK_DIR, `${id}-music.mp3`);
+  const textTopFile = path.join(WORK_DIR, `${id}-text-top.txt`);
+  const textBottomFile = path.join(WORK_DIR, `${id}-text-bottom.txt`);
+
+  const safeTextTop = cleanText(textTop);
+  const safeTextBottom = cleanText(textBottom);
+
+  if (safeTextTop) {
+    fs.writeFileSync(textTopFile, safeTextTop, "utf8");
+  }
+
+  if (safeTextBottom) {
+    fs.writeFileSync(textBottomFile, safeTextBottom, "utf8");
+  }
+
+  try {
+    await runCommand("ffmpeg", [
+      "-y",
+      "-i", musicUrl,
+      "-c", "copy",
+      musicPath
+    ]);
+
+    const videoFilter = buildVideoFilter({
+      textTop: safeTextTop,
+      textBottom: safeTextBottom,
+      textTopFile,
+      textBottomFile
+    });
+
+    await runCommand("ffmpeg", [
+      "-y",
+      "-i", inputVideo,
+      "-i", musicPath,
+      "-filter_complex",
+      `[0:v]${videoFilter}[v];[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6[a]`,
+      "-map", "[v]",
+      "-map", "[a]",
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "23",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "192k",
+      "-shortest",
+      "-movflags", "+faststart",
+      outputPath
+    ]);
+  } finally {
+    if (fs.existsSync(textTopFile)) fs.unlinkSync(textTopFile);
+    if (fs.existsSync(textBottomFile)) fs.unlinkSync(textBottomFile);
+    if (fs.existsSync(musicPath)) fs.unlinkSync(musicPath);
+  }
+}
+
 app.get("/", (req, res) => {
   res.json({
     ok: true,
@@ -52,9 +145,16 @@ app.get("/", (req, res) => {
 /**
  * Eski sistem:
  * videoUrl + musicUrl ile çalışır.
+ * Bu endpoint de artık textTop / textBottom destekler.
  */
 app.post("/render", async (req, res) => {
-  const { videoUrl, musicUrl, musicVolume = 0.35 } = req.body;
+  const {
+    videoUrl,
+    musicUrl,
+    musicVolume = 0.35,
+    textTop = "",
+    textBottom = ""
+  } = req.body;
 
   if (!isSafeUrl(videoUrl)) {
     return res.status(400).json({
@@ -71,39 +171,19 @@ app.post("/render", async (req, res) => {
   }
 
   const id = uuidv4();
-  const videoPath = path.join(WORK_DIR, `${id}-video.mp4`);
-  const musicPath = path.join(WORK_DIR, `${id}-music.mp3`);
   const outputPath = path.join(WORK_DIR, `${id}-final.mp4`);
   const outputName = path.basename(outputPath);
 
   try {
-    await runCommand("ffmpeg", [
-      "-y",
-      "-i", videoUrl,
-      "-c", "copy",
-      videoPath
-    ]);
-
-    await runCommand("ffmpeg", [
-      "-y",
-      "-i", musicUrl,
-      "-c", "copy",
-      musicPath
-    ]);
-
-    await runCommand("ffmpeg", [
-      "-y",
-      "-i", videoPath,
-      "-i", musicPath,
-      "-filter_complex",
-      `[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6[a]`,
-      "-map", "0:v:0",
-      "-map", "[a]",
-      "-c:v", "copy",
-      "-c:a", "aac",
-      "-shortest",
-      outputPath
-    ]);
+    await processRender({
+      inputVideo: videoUrl,
+      musicUrl,
+      musicVolume,
+      textTop,
+      textBottom,
+      outputPath,
+      id
+    });
 
     const baseUrl = getBaseUrl(req);
 
@@ -128,9 +208,16 @@ app.post("/render", async (req, res) => {
  * - video: MP4 dosyası
  * - musicUrl: müzik linki
  * - musicVolume: 0.35
+ * - textTop: İngilizce üst yazı
+ * - textBottom: Türkçe alt yazı
  */
 app.post("/render-upload", upload.single("video"), async (req, res) => {
-  const { musicUrl, musicVolume = 0.35 } = req.body;
+  const {
+    musicUrl,
+    musicVolume = 0.35,
+    textTop = "",
+    textBottom = ""
+  } = req.body;
 
   if (!req.file) {
     return res.status(400).json({
@@ -149,39 +236,19 @@ app.post("/render-upload", upload.single("video"), async (req, res) => {
   const id = uuidv4();
 
   const uploadedVideoPath = req.file.path;
-  const videoPath = path.join(WORK_DIR, `${id}-video.mp4`);
-  const musicPath = path.join(WORK_DIR, `${id}-music.mp3`);
   const outputPath = path.join(WORK_DIR, `${id}-final.mp4`);
   const outputName = path.basename(outputPath);
 
   try {
-    await runCommand("ffmpeg", [
-      "-y",
-      "-i", uploadedVideoPath,
-      "-c", "copy",
-      videoPath
-    ]);
-
-    await runCommand("ffmpeg", [
-      "-y",
-      "-i", musicUrl,
-      "-c", "copy",
-      musicPath
-    ]);
-
-    await runCommand("ffmpeg", [
-      "-y",
-      "-i", videoPath,
-      "-i", musicPath,
-      "-filter_complex",
-      `[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6[a]`,
-      "-map", "0:v:0",
-      "-map", "[a]",
-      "-c:v", "copy",
-      "-c:a", "aac",
-      "-shortest",
-      outputPath
-    ]);
+    await processRender({
+      inputVideo: uploadedVideoPath,
+      musicUrl,
+      musicVolume,
+      textTop,
+      textBottom,
+      outputPath,
+      id
+    });
 
     if (fs.existsSync(uploadedVideoPath)) {
       fs.unlinkSync(uploadedVideoPath);

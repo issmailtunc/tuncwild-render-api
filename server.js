@@ -70,15 +70,18 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
 
   const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
+  // Yazı sadece bu zaman aralığında görünür
+  const textEnable = "enable='between(t,1,5.5)'";
+
   if (textTop) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=70:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62`
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=78:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62:${textEnable}`
     );
   }
 
   if (textBottom) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=56:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62+82`
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=62:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62+90:${textEnable}`
     );
   }
 
@@ -170,11 +173,6 @@ app.get("/", (req, res) => {
   });
 });
 
-/**
- * Eski sistem:
- * videoUrl + musicUrl ile çalışır.
- * Bunu şimdilik yedek olarak tutuyoruz.
- */
 app.post("/render", async (req, res) => {
   const {
     videoUrl,
@@ -228,20 +226,6 @@ app.post("/render", async (req, res) => {
   }
 });
 
-/**
- * Yeni sistem:
- * n8n'den video ve müzik dosyasını upload olarak alır.
- *
- * Beklenen multipart/form-data:
- * - video: MP4 dosyası
- * - music: MP3 / audio dosyası
- * - musicVolume: 0.35
- * - textTop: İngilizce yazı
- * - textBottom: Türkçe yazı
- *
- * Not:
- * musicUrl hâlâ yedek olarak desteklenir ama yeni akışta music dosyası kullanılacak.
- */
 app.post(
   "/render-upload",
   upload.fields([

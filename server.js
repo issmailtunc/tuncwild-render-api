@@ -57,18 +57,15 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
 
   const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
-  const topFontSize = "min(h*0.066,70)";
-  const bottomFontSize = "min(h*0.052,56)";
-
   if (textTop) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='${topFontSize}':borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62`
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=70:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62`
     );
   }
 
   if (textBottom) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='${bottomFontSize}':borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62+min(h*0.066,70)+14`
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=56:borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62+82`
     );
   }
 

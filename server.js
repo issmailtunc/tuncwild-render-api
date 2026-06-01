@@ -59,13 +59,13 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
 
   if (textTop) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.075,78)':box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:y=h*0.58`
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.075,78)':box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:y=h*0.60`
     );
   }
 
   if (textBottom) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='min(h*0.062,66)':box=1:boxcolor=black@0.55:boxborderw=20:x=(w-text_w)/2:y=h*0.68`
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='min(h*0.062,66)':box=1:boxcolor=black@0.55:boxborderw=20:x=(w-text_w)/2:y=h*0.67`
     );
   }
 

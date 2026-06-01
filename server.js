@@ -51,32 +51,24 @@ function cleanText(value) {
     .slice(0, 120);
 }
 
-function buildTextBlock(textTop, textBottom) {
-  const safeTextTop = cleanText(textTop);
-  const safeTextBottom = cleanText(textBottom);
+function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) {
+  const filters = [];
 
-  if (safeTextTop && safeTextBottom) {
-    return `${safeTextTop}\n${safeTextBottom}`;
-  }
-
-  if (safeTextTop) return safeTextTop;
-  if (safeTextBottom) return safeTextBottom;
-
-  return "";
-}
-
-function buildVideoFilter({ textBlock, textBlockFile }) {
-  if (!textBlock) {
-    return "null";
-  }
-
-  // Alpine Linux + ttf-dejavu font path
   const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
-  return [
-    "drawbox=x=iw*0.07:y=ih*0.56:w=iw*0.86:h=ih*0.17:color=black@0.52:t=fill",
-    `drawtext=fontfile='${fontFile}':textfile='${textBlockFile}':fontcolor=white:fontsize='min(h*0.056,60)':line_spacing=14:x=(w-text_w)/2:y=h*0.595`
-  ].join(",");
+  if (textTop) {
+    filters.push(
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.066,70)':borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.62`
+    );
+  }
+
+  if (textBottom) {
+    filters.push(
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize='min(h*0.052,56)':borderw=4:bordercolor=black@0.95:shadowcolor=black@0.65:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h*0.685`
+    );
+  }
+
+  return filters.length > 0 ? filters.join(",") : "null";
 }
 
 async function processRender({
@@ -89,12 +81,18 @@ async function processRender({
   id
 }) {
   const musicPath = path.join(WORK_DIR, `${id}-music.mp3`);
-  const textBlockFile = path.join(WORK_DIR, `${id}-text-block.txt`);
+  const textTopFile = path.join(WORK_DIR, `${id}-text-top.txt`);
+  const textBottomFile = path.join(WORK_DIR, `${id}-text-bottom.txt`);
 
-  const textBlock = buildTextBlock(textTop, textBottom);
+  const safeTextTop = cleanText(textTop);
+  const safeTextBottom = cleanText(textBottom);
 
-  if (textBlock) {
-    fs.writeFileSync(textBlockFile, textBlock, "utf8");
+  if (safeTextTop) {
+    fs.writeFileSync(textTopFile, safeTextTop, "utf8");
+  }
+
+  if (safeTextBottom) {
+    fs.writeFileSync(textBottomFile, safeTextBottom, "utf8");
   }
 
   try {
@@ -106,8 +104,10 @@ async function processRender({
     ]);
 
     const videoFilter = buildVideoFilter({
-      textBlock,
-      textBlockFile
+      textTop: safeTextTop,
+      textBottom: safeTextBottom,
+      textTopFile,
+      textBottomFile
     });
 
     await runCommand("ffmpeg", [
@@ -129,7 +129,8 @@ async function processRender({
       outputPath
     ]);
   } finally {
-    if (fs.existsSync(textBlockFile)) fs.unlinkSync(textBlockFile);
+    if (fs.existsSync(textTopFile)) fs.unlinkSync(textTopFile);
+    if (fs.existsSync(textBottomFile)) fs.unlinkSync(textBottomFile);
     if (fs.existsSync(musicPath)) fs.unlinkSync(musicPath);
   }
 }
@@ -142,11 +143,6 @@ app.get("/", (req, res) => {
   });
 });
 
-/**
- * Eski sistem:
- * videoUrl + musicUrl ile çalışır.
- * Bu endpoint textTop / textBottom destekler.
- */
 app.post("/render", async (req, res) => {
   const {
     videoUrl,
@@ -200,17 +196,6 @@ app.post("/render", async (req, res) => {
   }
 });
 
-/**
- * Yeni sistem:
- * n8n'den video dosyasını upload olarak alır.
- *
- * Beklenen multipart/form-data:
- * - video: MP4 dosyası
- * - musicUrl: müzik linki
- * - musicVolume: 0.35
- * - textTop: İngilizce yazı
- * - textBottom: Türkçe yazı
- */
 app.post("/render-upload", upload.single("video"), async (req, res) => {
   const {
     musicUrl,

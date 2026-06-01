@@ -53,8 +53,8 @@ function cleanText(value) {
 function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) {
   const filters = [];
 
-  const fontFile = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
-
+  const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
+  
   if (textTop) {
     filters.push(
       `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize='min(h*0.052,54)':box=1:boxcolor=black@0.45:boxborderw=18:x=(w-text_w)/2:y=h*0.66`

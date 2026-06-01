@@ -27,6 +27,7 @@ function runCommand(command, args) {
         reject(new Error(stderr || error.message));
         return;
       }
+
       resolve({ stdout, stderr });
     });
   });
@@ -51,17 +52,22 @@ app.get("/", (req, res) => {
 /**
  * Eski sistem:
  * videoUrl + musicUrl ile çalışır.
- * Bunu şimdilik bozmadık.
  */
 app.post("/render", async (req, res) => {
   const { videoUrl, musicUrl, musicVolume = 0.35 } = req.body;
 
   if (!isSafeUrl(videoUrl)) {
-    return res.status(400).json({ error: "videoUrl is required and must be http/https" });
+    return res.status(400).json({
+      success: false,
+      error: "videoUrl is required and must be http/https"
+    });
   }
 
   if (!isSafeUrl(musicUrl)) {
-    return res.status(400).json({ error: "musicUrl is required and must be http/https" });
+    return res.status(400).json({
+      success: false,
+      error: "musicUrl is required and must be http/https"
+    });
   }
 
   const id = uuidv4();
@@ -74,7 +80,6 @@ app.post("/render", async (req, res) => {
     await runCommand("ffmpeg", [
       "-y",
       "-i", videoUrl,
-      "-t", "8",
       "-c", "copy",
       videoPath
     ]);
@@ -82,7 +87,6 @@ app.post("/render", async (req, res) => {
     await runCommand("ffmpeg", [
       "-y",
       "-i", musicUrl,
-      "-t", "8",
       "-c", "copy",
       musicPath
     ]);
@@ -92,7 +96,7 @@ app.post("/render", async (req, res) => {
       "-i", videoPath,
       "-i", musicPath,
       "-filter_complex",
-      `[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6,afade=t=out:st=7.2:d=0.8[a]`,
+      `[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6[a]`,
       "-map", "0:v:0",
       "-map", "[a]",
       "-c:v", "copy",
@@ -129,11 +133,17 @@ app.post("/render-upload", upload.single("video"), async (req, res) => {
   const { musicUrl, musicVolume = 0.35 } = req.body;
 
   if (!req.file) {
-    return res.status(400).json({ error: "video file is required. Field name must be 'video'." });
+    return res.status(400).json({
+      success: false,
+      error: "video file is required. Field name must be 'video'."
+    });
   }
 
   if (!isSafeUrl(musicUrl)) {
-    return res.status(400).json({ error: "musicUrl is required and must be http/https" });
+    return res.status(400).json({
+      success: false,
+      error: "musicUrl is required and must be http/https"
+    });
   }
 
   const id = uuidv4();
@@ -148,7 +158,6 @@ app.post("/render-upload", upload.single("video"), async (req, res) => {
     await runCommand("ffmpeg", [
       "-y",
       "-i", uploadedVideoPath,
-      "-t", "8",
       "-c", "copy",
       videoPath
     ]);
@@ -156,7 +165,6 @@ app.post("/render-upload", upload.single("video"), async (req, res) => {
     await runCommand("ffmpeg", [
       "-y",
       "-i", musicUrl,
-      "-t", "8",
       "-c", "copy",
       musicPath
     ]);
@@ -166,7 +174,7 @@ app.post("/render-upload", upload.single("video"), async (req, res) => {
       "-i", videoPath,
       "-i", musicPath,
       "-filter_complex",
-      `[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6,afade=t=out:st=7.2:d=0.8[a]`,
+      `[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6[a]`,
       "-map", "0:v:0",
       "-map", "[a]",
       "-c:v", "copy",
@@ -203,7 +211,10 @@ app.get("/files/:filename", (req, res) => {
   const filePath = path.join(WORK_DIR, filename);
 
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: "File not found" });
+    return res.status(404).json({
+      success: false,
+      error: "File not found"
+    });
   }
 
   res.download(filePath);

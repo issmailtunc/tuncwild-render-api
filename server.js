@@ -74,7 +74,7 @@ function buildVideoFilter({ textBlock, textBlockFile }) {
   const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
 
   return [
-    "drawbox=x=w*0.07:y=h*0.56:w=w*0.86:h=h*0.17:color=black@0.52:t=fill",
+    "drawbox=x=iw*0.07:y=ih*0.56:w=iw*0.86:h=ih*0.17:color=black@0.52:t=fill",
     `drawtext=fontfile='${fontFile}':textfile='${textBlockFile}':fontcolor=white:fontsize='min(h*0.056,60)':line_spacing=14:x=(w-text_w)/2:y=h*0.595`
   ].join(",");
 }

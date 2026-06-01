@@ -52,6 +52,19 @@ function cleanText(value) {
     .slice(0, 120);
 }
 
+function normalizeVolume(value) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return 0.35;
+  }
+
+  if (parsed < 0) return 0;
+  if (parsed > 1) return 1;
+
+  return parsed;
+}
+
 function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) {
   const filters = [];
 
@@ -74,6 +87,7 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
 
 async function processRender({
   inputVideo,
+  inputMusic,
   musicUrl,
   musicVolume,
   textTop,
@@ -87,6 +101,7 @@ async function processRender({
 
   const safeTextTop = cleanText(textTop);
   const safeTextBottom = cleanText(textBottom);
+  const safeMusicVolume = normalizeVolume(musicVolume);
 
   if (safeTextTop) {
     fs.writeFileSync(textTopFile, safeTextTop, "utf8");
@@ -97,12 +112,23 @@ async function processRender({
   }
 
   try {
-    await runCommand("ffmpeg", [
-      "-y",
-      "-i", musicUrl,
-      "-c", "copy",
-      musicPath
-    ]);
+    if (inputMusic) {
+      await runCommand("ffmpeg", [
+        "-y",
+        "-i", inputMusic,
+        "-c", "copy",
+        musicPath
+      ]);
+    } else if (isSafeUrl(musicUrl)) {
+      await runCommand("ffmpeg", [
+        "-y",
+        "-i", musicUrl,
+        "-c", "copy",
+        musicPath
+      ]);
+    } else {
+      throw new Error("music file or musicUrl is required");
+    }
 
     const videoFilter = buildVideoFilter({
       textTop: safeTextTop,
@@ -116,7 +142,7 @@ async function processRender({
       "-i", inputVideo,
       "-i", musicPath,
       "-filter_complex",
-      `[0:v]${videoFilter}[v];[1:a]volume=${musicVolume},afade=t=in:st=0:d=0.6[a]`,
+      `[0:v]${videoFilter}[v];[1:a]volume=${safeMusicVolume},afade=t=in:st=0:d=0.6[a]`,
       "-map", "[v]",
       "-map", "[a]",
       "-c:v", "libx264",
@@ -144,6 +170,11 @@ app.get("/", (req, res) => {
   });
 });
 
+/**
+ * Eski sistem:
+ * videoUrl + musicUrl ile çalışır.
+ * Bunu şimdilik yedek olarak tutuyoruz.
+ */
 app.post("/render", async (req, res) => {
   const {
     videoUrl,
@@ -197,67 +228,101 @@ app.post("/render", async (req, res) => {
   }
 });
 
-app.post("/render-upload", upload.single("video"), async (req, res) => {
-  const {
-    musicUrl,
-    musicVolume = 0.35,
-    textTop = "",
-    textBottom = ""
-  } = req.body;
+/**
+ * Yeni sistem:
+ * n8n'den video ve müzik dosyasını upload olarak alır.
+ *
+ * Beklenen multipart/form-data:
+ * - video: MP4 dosyası
+ * - music: MP3 / audio dosyası
+ * - musicVolume: 0.35
+ * - textTop: İngilizce yazı
+ * - textBottom: Türkçe yazı
+ *
+ * Not:
+ * musicUrl hâlâ yedek olarak desteklenir ama yeni akışta music dosyası kullanılacak.
+ */
+app.post(
+  "/render-upload",
+  upload.fields([
+    { name: "video", maxCount: 1 },
+    { name: "music", maxCount: 1 }
+  ]),
+  async (req, res) => {
+    const {
+      musicUrl = "",
+      musicVolume = 0.35,
+      textTop = "",
+      textBottom = ""
+    } = req.body;
 
-  if (!req.file) {
-    return res.status(400).json({
-      success: false,
-      error: "video file is required. Field name must be 'video'."
-    });
-  }
+    const videoFile = req.files?.video?.[0];
+    const musicFile = req.files?.music?.[0];
 
-  if (!isSafeUrl(musicUrl)) {
-    return res.status(400).json({
-      success: false,
-      error: "musicUrl is required and must be http/https"
-    });
-  }
-
-  const id = uuidv4();
-
-  const uploadedVideoPath = req.file.path;
-  const outputPath = path.join(WORK_DIR, `${id}-final.mp4`);
-  const outputName = path.basename(outputPath);
-
-  try {
-    await processRender({
-      inputVideo: uploadedVideoPath,
-      musicUrl,
-      musicVolume,
-      textTop,
-      textBottom,
-      outputPath,
-      id
-    });
-
-    if (fs.existsSync(uploadedVideoPath)) {
-      fs.unlinkSync(uploadedVideoPath);
+    if (!videoFile) {
+      return res.status(400).json({
+        success: false,
+        error: "video file is required. Field name must be 'video'."
+      });
     }
 
-    const baseUrl = getBaseUrl(req);
-
-    res.json({
-      success: true,
-      id,
-      url: `${baseUrl}/files/${outputName}`
-    });
-  } catch (error) {
-    if (fs.existsSync(uploadedVideoPath)) {
-      fs.unlinkSync(uploadedVideoPath);
+    if (!musicFile && !isSafeUrl(musicUrl)) {
+      return res.status(400).json({
+        success: false,
+        error: "music file is required. Field name must be 'music'."
+      });
     }
 
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    const id = uuidv4();
+
+    const uploadedVideoPath = videoFile.path;
+    const uploadedMusicPath = musicFile ? musicFile.path : null;
+    const outputPath = path.join(WORK_DIR, `${id}-final.mp4`);
+    const outputName = path.basename(outputPath);
+
+    try {
+      await processRender({
+        inputVideo: uploadedVideoPath,
+        inputMusic: uploadedMusicPath,
+        musicUrl,
+        musicVolume,
+        textTop,
+        textBottom,
+        outputPath,
+        id
+      });
+
+      if (fs.existsSync(uploadedVideoPath)) {
+        fs.unlinkSync(uploadedVideoPath);
+      }
+
+      if (uploadedMusicPath && fs.existsSync(uploadedMusicPath)) {
+        fs.unlinkSync(uploadedMusicPath);
+      }
+
+      const baseUrl = getBaseUrl(req);
+
+      res.json({
+        success: true,
+        id,
+        url: `${baseUrl}/files/${outputName}`
+      });
+    } catch (error) {
+      if (fs.existsSync(uploadedVideoPath)) {
+        fs.unlinkSync(uploadedVideoPath);
+      }
+
+      if (uploadedMusicPath && fs.existsSync(uploadedMusicPath)) {
+        fs.unlinkSync(uploadedMusicPath);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
   }
-});
+);
 
 app.get("/files/:filename", (req, res) => {
   const filename = path.basename(req.params.filename);

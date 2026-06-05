@@ -73,19 +73,27 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
   // Yazı 1.0 - 5.5 saniye arasında görünür
   const textEnable = "enable='between(t,1,5.5)'";
 
-  // 1.0 - 1.3 fade-in, 5.2 - 5.5 fade-out
+  // 1.0 - 1.35 fade-in, 5.1 - 5.5 fade-out
   const textAlpha =
-    "alpha='if(lt(t\\,1.3)\\,(t-1)/0.3\\,if(lt(t\\,5.2)\\,1\\,(5.5-t)/0.3))'";
+    "alpha='if(lt(t\\,1.35)\\,(t-1)/0.35\\,if(lt(t\\,5.1)\\,1\\,(5.5-t)/0.4))'";
+
+  // 1.0 - 1.35 arası hafif aşağıdan yukarı gelir
+  // 5.1 - 5.5 arası çok hafif yukarı kaybolur
+  const topY =
+    "y='if(lt(t\\,1.35)\\,h*0.60+28-(t-1)/0.35*28\\,if(lt(t\\,5.1)\\,h*0.60\\,h*0.60-(t-5.1)/0.4*18))'";
+
+  const bottomY =
+    "y='if(lt(t\\,1.35)\\,h*0.60+136-(t-1)/0.35*28\\,if(lt(t\\,5.1)\\,h*0.60+108\\,h*0.60+108-(t-5.1)/0.4*18))'";
 
   if (textTop) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=92:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:y=h*0.60:${textAlpha}:${textEnable}`
+      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=92:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:${topY}:${textAlpha}:${textEnable}`
     );
   }
 
   if (textBottom) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=72:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:y=h*0.60+108:${textAlpha}:${textEnable}`
+      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=72:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:${bottomY}:${textAlpha}:${textEnable}`
     );
   }
 

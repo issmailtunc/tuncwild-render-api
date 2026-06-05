@@ -73,17 +73,17 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
   // Yazı 1.0 - 5.5 saniye arasında görünür
   const textEnable = "enable='between(t,1,5.5)'";
 
-  // 1.0 - 1.35 fade-in, 5.1 - 5.5 fade-out
+  // 1.0 - 1.8 fade-in, 4.8 - 5.5 fade-out
   const textAlpha =
-    "alpha='if(lt(t\\,1.35)\\,(t-1)/0.35\\,if(lt(t\\,5.1)\\,1\\,(5.5-t)/0.4))'";
+    "alpha='if(lt(t\\,1.8)\\,(t-1)/0.8\\,if(lt(t\\,4.8)\\,1\\,(5.5-t)/0.7))'";
 
-  // 1.0 - 1.35 arası hafif aşağıdan yukarı gelir
-  // 5.1 - 5.5 arası çok hafif yukarı kaybolur
+  // 1.0 - 1.8 arası daha yumuşak aşağıdan yukarı gelir
+  // 4.8 - 5.5 arası hafif yukarı kaybolur
   const topY =
-    "y='if(lt(t\\,1.35)\\,h*0.60+28-(t-1)/0.35*28\\,if(lt(t\\,5.1)\\,h*0.60\\,h*0.60-(t-5.1)/0.4*18))'";
+    "y='if(lt(t\\,1.8)\\,h*0.60+38-(t-1)/0.8*38\\,if(lt(t\\,4.8)\\,h*0.60\\,h*0.60-(t-4.8)/0.7*22))'";
 
   const bottomY =
-    "y='if(lt(t\\,1.35)\\,h*0.60+136-(t-1)/0.35*28\\,if(lt(t\\,5.1)\\,h*0.60+108\\,h*0.60+108-(t-5.1)/0.4*18))'";
+    "y='if(lt(t\\,1.8)\\,h*0.60+146-(t-1)/0.8*38\\,if(lt(t\\,4.8)\\,h*0.60+108\\,h*0.60+108-(t-4.8)/0.7*22))'";
 
   if (textTop) {
     filters.push(

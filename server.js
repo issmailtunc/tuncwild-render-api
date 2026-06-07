@@ -66,6 +66,134 @@ function normalizeVolume(value) {
   return parsed;
 }
 
+function isWeakLineEnd(word) {
+  const weakWords = [
+    // English weak endings
+    "ON",
+    "IN",
+    "AT",
+    "TO",
+    "OF",
+    "FOR",
+    "FROM",
+    "WITH",
+    "BY",
+    "AND",
+    "OR",
+    "THE",
+    "A",
+    "AN",
+
+    // Turkish weak endings / weak visual endings
+    "VE",
+    "İLE",
+    "İÇİN",
+    "GİBİ",
+    "KADAR",
+    "ÜSTÜNE",
+    "ÜZERİNE",
+    "İÇİNE",
+    "DIŞINA",
+    "ALTINA",
+    "ARASINA"
+  ];
+
+  return weakWords.includes(String(word || "").toLocaleUpperCase("tr-TR"));
+}
+
+function isWeakSingleLastLine(word) {
+  const weakSingleWords = [
+    "BIRAKIR",
+    "KALIR",
+    "DOKUNUR",
+    "TAŞIR",
+    "İNER",
+    "GELİR",
+    "GİDER",
+    "AKAR",
+    "AÇILIR",
+    "SÜZÜLÜR",
+    "PARLAR",
+    "IŞILDAR",
+    "DİNLER",
+    "KONUŞUR"
+  ];
+
+  return weakSingleWords.includes(String(word || "").toLocaleUpperCase("tr-TR"));
+}
+
+function balancedTwoLineSplit(words, maxCharsPerLine) {
+  if (words.length <= 1) {
+    return [words.join(" ")];
+  }
+
+  let best = null;
+
+  for (let i = 1; i < words.length; i++) {
+    const firstWords = words.slice(0, i);
+    const secondWords = words.slice(i);
+
+    const line1 = firstWords.join(" ").trim();
+    const line2 = secondWords.join(" ").trim();
+
+    const lastWordLine1 = firstWords[firstWords.length - 1];
+    const firstWordLine2 = secondWords[0];
+
+    let score = 0;
+
+    // Görsel denge: satırlar birbirine yakın uzunlukta olsun
+    score += Math.abs(line1.length - line2.length) * 2;
+
+    // Maksimum karakteri aşarsa ceza ver ama tamamen yasaklama
+    if (line1.length > maxCharsPerLine) {
+      score += (line1.length - maxCharsPerLine) * 8;
+    }
+
+    if (line2.length > maxCharsPerLine) {
+      score += (line2.length - maxCharsPerLine) * 8;
+    }
+
+    // "ON", "THE", "ÜSTÜNE" gibi kelimeler satır sonunda kalmasın
+    if (isWeakLineEnd(lastWordLine1)) {
+      score += 45;
+    }
+
+    // İkinci satır tek kelime kalmasın
+    if (secondWords.length === 1) {
+      score += 70;
+    }
+
+    // İlk satır da tek kelime kalmasın
+    if (firstWords.length === 1) {
+      score += 35;
+    }
+
+    // İkinci satır aşırı kısa olmasın
+    if (line2.length < 10) {
+      score += 35;
+    }
+
+    // Türkçe fiil tek başına alt satıra düşmesin
+    if (secondWords.length === 1 && isWeakSingleLastLine(firstWordLine2)) {
+      score += 90;
+    }
+
+    // Çok kısa ilk satır da zayıf durur
+    if (line1.length < 10) {
+      score += 25;
+    }
+
+    if (!best || score < best.score) {
+      best = {
+        score,
+        lines: [line1, line2]
+      };
+    }
+  }
+
+  return best ? best.lines : [words.join(" ")];
+}
+
 function wrapText(text, maxCharsPerLine, maxLines = 2) {
   const clean = String(text || "")
     .replace(/\s+/g, " ")
@@ -73,11 +201,18 @@ function wrapText(text, maxCharsPerLine, maxLines = 2) {
 
   if (!clean) return [];
 
-  if (clean.length <= maxCharsPerLine) {
+  if (clean.length <= maxCharsPerLine || maxLines <= 1) {
     return [clean];
   }
 
   const words = clean.split(" ");
+
+  if (maxLines === 2) {
+    return balancedTwoLineSplit(words, maxCharsPerLine)
+      .map(line => line.trim())
+      .filter(Boolean);
+  }
+
   const lines = [];
   let current = "";
 

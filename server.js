@@ -48,8 +48,9 @@ function cleanText(value) {
     .replace(/\r/g, "")
     .replace(/\n/g, " ")
     .replace(/[’‘]/g, "'")
+    .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 120);
+    .slice(0, 220);
 }
 
 function normalizeVolume(value) {
@@ -65,7 +66,159 @@ function normalizeVolume(value) {
   return parsed;
 }
 
-function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) {
+function wrapText(text, maxCharsPerLine, maxLines = 2) {
+  const clean = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!clean) return [];
+
+  if (clean.length <= maxCharsPerLine) {
+    return [clean];
+  }
+
+  const words = clean.split(" ");
+  const lines = [];
+  let current = "";
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const next = current ? `${current} ${word}` : word;
+
+    if (next.length <= maxCharsPerLine || !current) {
+      current = next;
+      continue;
+    }
+
+    lines.push(current);
+
+    if (lines.length >= maxLines - 1) {
+      const rest = words.slice(i).join(" ");
+      if (rest) lines.push(rest);
+      current = "";
+      break;
+    }
+
+    current = word;
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines.slice(0, maxLines).map(line => line.trim()).filter(Boolean);
+}
+
+function chooseTextSizing(textTop, textBottom) {
+  const longest = Math.max(
+    String(textTop || "").length,
+    String(textBottom || "").length
+  );
+
+  if (longest <= 28) {
+    return {
+      topFontSize: 92,
+      bottomFontSize: 72,
+      topMaxChars: 999,
+      bottomMaxChars: 999,
+      maxLinesPerText: 1
+    };
+  }
+
+  if (longest <= 45) {
+    return {
+      topFontSize: 72,
+      bottomFontSize: 60,
+      topMaxChars: 28,
+      bottomMaxChars: 26,
+      maxLinesPerText: 2
+    };
+  }
+
+  if (longest <= 70) {
+    return {
+      topFontSize: 60,
+      bottomFontSize: 52,
+      topMaxChars: 31,
+      bottomMaxChars: 29,
+      maxLinesPerText: 2
+    };
+  }
+
+  return {
+    topFontSize: 52,
+    bottomFontSize: 46,
+    topMaxChars: 34,
+    bottomMaxChars: 32,
+    maxLinesPerText: 2
+  };
+}
+
+function prepareTextLayout(textTop, textBottom) {
+  const sizing = chooseTextSizing(textTop, textBottom);
+
+  const topLines = textTop
+    ? wrapText(textTop, sizing.topMaxChars, sizing.maxLinesPerText)
+    : [];
+
+  const bottomLines = textBottom
+    ? wrapText(textBottom, sizing.bottomMaxChars, sizing.maxLinesPerText)
+    : [];
+
+  const lineGap = 8;
+  const groupGap = topLines.length && bottomLines.length ? 20 : 0;
+
+  const lines = [];
+  let cursor = 0;
+
+  for (const line of topLines) {
+    lines.push({
+      text: line,
+      fontSize: sizing.topFontSize,
+      yOffset: cursor
+    });
+
+    cursor += Math.round(sizing.topFontSize * 1.18) + lineGap;
+  }
+
+  if (topLines.length && bottomLines.length) {
+    cursor += groupGap;
+  }
+
+  for (const line of bottomLines) {
+    lines.push({
+      text: line,
+      fontSize: sizing.bottomFontSize,
+      yOffset: cursor
+    });
+
+    cursor += Math.round(sizing.bottomFontSize * 1.18) + lineGap;
+  }
+
+  if (lines.length) {
+    cursor -= lineGap;
+  }
+
+  const totalHeight = Math.max(cursor, 0);
+  const lineCount = lines.length;
+
+  let anchor = "h*0.60";
+
+  if (lineCount >= 4) {
+    anchor = "h*0.53";
+  } else if (lineCount === 3) {
+    anchor = "h*0.56";
+  } else if (lineCount === 2) {
+    anchor = "h*0.59";
+  }
+
+  return lines.map(line => ({
+    ...line,
+    yBase: `${anchor}-${Math.round(totalHeight / 2)}+${Math.round(line.yOffset)}`
+  }));
+}
+
+function buildVideoFilter({ textLines }) {
   const filters = [];
 
   const fontFile = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf";
@@ -77,23 +230,16 @@ function buildVideoFilter({ textTop, textBottom, textTopFile, textBottomFile }) 
   const textAlpha =
     "alpha='if(lt(t\\,1.8)\\,(t-1)/0.8\\,if(lt(t\\,4.8)\\,1\\,(5.5-t)/0.7))'";
 
-  // 1.0 - 1.8 arası daha yumuşak aşağıdan yukarı gelir
-  // 4.8 - 5.5 arası hafif yukarı kaybolur
-  const topY =
-    "y='if(lt(t\\,1.8)\\,h*0.60+38-(t-1)/0.8*38\\,if(lt(t\\,4.8)\\,h*0.60\\,h*0.60-(t-4.8)/0.7*22))'";
+  for (const line of textLines) {
+    const borderW = line.fontSize <= 48 ? 2 : 3;
+    const shadow = line.fontSize <= 48 ? 2 : 3;
 
-  const bottomY =
-    "y='if(lt(t\\,1.8)\\,h*0.60+146-(t-1)/0.8*38\\,if(lt(t\\,4.8)\\,h*0.60+108\\,h*0.60+108-(t-4.8)/0.7*22))'";
+    const y =
+      `y='if(lt(t\\,1.8)\\,${line.yBase}+38-(t-1)/0.8*38\\,` +
+      `if(lt(t\\,4.8)\\,${line.yBase}\\,${line.yBase}-(t-4.8)/0.7*22))'`;
 
-  if (textTop) {
     filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textTopFile}':fontcolor=white:fontsize=92:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:${topY}:${textAlpha}:${textEnable}`
-    );
-  }
-
-  if (textBottom) {
-    filters.push(
-      `drawtext=fontfile='${fontFile}':textfile='${textBottomFile}':fontcolor=white:fontsize=72:borderw=3:bordercolor=black@1:shadowcolor=black@0.75:shadowx=3:shadowy=3:x=(w-text_w)/2:${bottomY}:${textAlpha}:${textEnable}`
+      `drawtext=fontfile='${fontFile}':textfile='${line.file}':fontcolor=white:fontsize=${line.fontSize}:borderw=${borderW}:bordercolor=black@1:shadowcolor=black@0.75:shadowx=${shadow}:shadowy=${shadow}:x=(w-text_w)/2:${y}:${textAlpha}:${textEnable}`
     );
   }
 
@@ -111,20 +257,11 @@ async function processRender({
   id
 }) {
   const musicPath = path.join(WORK_DIR, `${id}-music.mp3`);
-  const textTopFile = path.join(WORK_DIR, `${id}-text-top.txt`);
-  const textBottomFile = path.join(WORK_DIR, `${id}-text-bottom.txt`);
-
   const safeTextTop = cleanText(textTop);
   const safeTextBottom = cleanText(textBottom);
   const safeMusicVolume = normalizeVolume(musicVolume);
 
-  if (safeTextTop) {
-    fs.writeFileSync(textTopFile, safeTextTop, "utf8");
-  }
-
-  if (safeTextBottom) {
-    fs.writeFileSync(textBottomFile, safeTextBottom, "utf8");
-  }
+  const textFiles = [];
 
   try {
     if (inputMusic) {
@@ -145,11 +282,21 @@ async function processRender({
       throw new Error("music file or musicUrl is required");
     }
 
+    const textLines = prepareTextLayout(safeTextTop, safeTextBottom).map(
+      (line, index) => {
+        const file = path.join(WORK_DIR, `${id}-text-${index}.txt`);
+        fs.writeFileSync(file, line.text, "utf8");
+        textFiles.push(file);
+
+        return {
+          ...line,
+          file
+        };
+      }
+    );
+
     const videoFilter = buildVideoFilter({
-      textTop: safeTextTop,
-      textBottom: safeTextBottom,
-      textTopFile,
-      textBottomFile
+      textLines
     });
 
     await runCommand("ffmpeg", [
@@ -171,8 +318,10 @@ async function processRender({
       outputPath
     ]);
   } finally {
-    if (fs.existsSync(textTopFile)) fs.unlinkSync(textTopFile);
-    if (fs.existsSync(textBottomFile)) fs.unlinkSync(textBottomFile);
+    for (const file of textFiles) {
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    }
+
     if (fs.existsSync(musicPath)) fs.unlinkSync(musicPath);
   }
 }

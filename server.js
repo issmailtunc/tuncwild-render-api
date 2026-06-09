@@ -89,6 +89,91 @@ async function getVideoDimensions(inputVideo) {
   return { width: 1080, height: 1920 };
 }
 
+async function getVideoDuration(inputVideo) {
+  try {
+    const { stdout } = await runCommand("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "json",
+      inputVideo
+    ]);
+
+    const data = JSON.parse(stdout);
+    const duration = Number(data.format?.duration);
+
+    if (Number.isFinite(duration) && duration > 0) {
+      return duration;
+    }
+  } catch (e) {
+    // Süre okunamazsa varsayılan kısa video sürelerine düş
+  }
+
+  return 0;
+}
+
+function pickFrameTimes(duration) {
+  const ratios = [0.06, 0.22, 0.38, 0.54, 0.70, 0.86];
+
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
+  }
+
+  if (duration < 1) {
+    return [Math.max(0, duration * 0.5)];
+  }
+
+  const maxTime = Math.max(0.1, duration - 0.15);
+
+  const times = ratios
+    .map((ratio) => Math.min(maxTime, Math.max(0.15, duration * ratio)))
+    .map((time) => Math.round(time * 100) / 100);
+
+  const uniqueTimes = [];
+
+  for (const time of times) {
+    if (!uniqueTimes.some((existing) => Math.abs(existing - time) < 0.25)) {
+      uniqueTimes.push(time);
+    }
+  }
+
+  return uniqueTimes;
+}
+
+async function extractVideoFrames({ inputVideo, id }) {
+  const duration = await getVideoDuration(inputVideo);
+  const times = pickFrameTimes(duration);
+  const frames = [];
+
+  for (let index = 0; index < times.length; index++) {
+    const time = times[index];
+    const frameName = `${id}-frame-${String(index + 1).padStart(2, "0")}.jpg`;
+    const framePath = path.join(WORK_DIR, frameName);
+
+    await runCommand("ffmpeg", [
+      "-y",
+      "-ss", String(time),
+      "-i", inputVideo,
+      "-frames:v", "1",
+      "-vf", "scale=720:-2:force_original_aspect_ratio=decrease",
+      "-q:v", "3",
+      framePath
+    ]);
+
+    frames.push({
+      index: index + 1,
+      time,
+      filename: frameName,
+      path: framePath
+    });
+  }
+
+  return {
+    duration,
+    frames
+  };
+}
+
+
 function isWeakLineEnd(word) {
   const weakWords = [
     "ON", "IN", "AT", "TO", "OF", "FOR", "FROM", "WITH", "BY",
@@ -433,7 +518,7 @@ app.get("/", (req, res) => {
   res.json({
     ok: true,
     service: "TUNC WILD Render API",
-    endpoints: ["/render", "/render-upload", "/files/:filename"]
+    endpoints: ["/render", "/render-upload", "/extract-frames", "/files/:filename"]
   });
 });
 
@@ -571,6 +656,69 @@ app.post(
     }
   }
 );
+
+app.post("/extract-frames", upload.single("video"), async (req, res) => {
+  const videoFile = req.file;
+
+  if (!videoFile) {
+    return res.status(400).json({
+      success: false,
+      error: "video file is required. Field name must be 'video'."
+    });
+  }
+
+  const id = uuidv4();
+  const uploadedVideoPath = videoFile.path;
+
+  try {
+    const { duration, frames } = await extractVideoFrames({
+      inputVideo: uploadedVideoPath,
+      id
+    });
+
+    if (fs.existsSync(uploadedVideoPath)) {
+      fs.unlinkSync(uploadedVideoPath);
+    }
+
+    const baseUrl = getBaseUrl(req);
+
+    res.json({
+      success: true,
+      id,
+      duration,
+      frameCount: frames.length,
+      frames: frames.map((frame) => ({
+        index: frame.index,
+        time: frame.time,
+        filename: frame.filename,
+        url: `${baseUrl}/files/${frame.filename}`
+      })),
+      analysisPurpose: "Use these frames to understand the real visual energy of the video before creative decisions."
+    });
+  } catch (error) {
+    if (fs.existsSync(uploadedVideoPath)) {
+      fs.unlinkSync(uploadedVideoPath);
+    }
+
+    try {
+      const partialFiles = fs.readdirSync(WORK_DIR)
+        .filter((filename) => filename.startsWith(`${id}-frame-`));
+
+      for (const filename of partialFiles) {
+        const filePath = path.join(WORK_DIR, filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    } catch (cleanupError) {
+      // Temizlik başarısız olursa ana hatayı gölgelemeyelim
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 
 app.get("/files/:filename", (req, res) => {
   const filename = path.basename(req.params.filename);

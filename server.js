@@ -63,6 +63,27 @@ function normalizeVolume(value) {
   return parsed;
 }
 
+// Çıktıyı maksimum boyut içine sığdırır (sadece küçültür, asla büyütmez).
+// Büyük (ör. 4K) kaynakları 1080x1920'ye indirip render'ı hızlandırır.
+function fitWithin(srcWidth, srcHeight, maxWidth, maxHeight) {
+  const w = Number(srcWidth);
+  const h = Number(srcHeight);
+
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return { width: maxWidth, height: maxHeight };
+  }
+
+  const scale = Math.min(maxWidth / w, maxHeight / h, 1); // sadece küçült
+
+  let outWidth = Math.round(w * scale);
+  let outHeight = Math.round(h * scale);
+
+  outWidth -= outWidth % 2;   // yuv420p çift sayı ister
+  outHeight -= outHeight % 2;
+
+  return { width: outWidth, height: outHeight };
+}
+
 async function getVideoDimensions(inputVideo) {
   try {
     const { stdout } = await runCommand("ffprobe", [
@@ -466,7 +487,9 @@ async function processRender({
       throw new Error("music file or musicUrl is required");
     }
 
-    const dimensions = await getVideoDimensions(inputVideo);
+    const srcDimensions = await getVideoDimensions(inputVideo);
+    // Shorts için 1080x1920'yi aşma; büyük (ör. 4K) kaynakları küçült
+    const dimensions = fitWithin(srcDimensions.width, srcDimensions.height, 1080, 1920);
 
     const textLines = prepareTextLayout(
       safeTextTop,
@@ -492,7 +515,7 @@ async function processRender({
       "-i", inputVideo,
       "-i", musicPath,
       "-filter_complex",
-      `[0:v]${videoFilter}[v];[1:a]volume=${safeMusicVolume},afade=t=in:st=0:d=0.6[a]`,
+      `[0:v]scale=${dimensions.width}:${dimensions.height}:flags=bicubic,${videoFilter}[v];[1:a]volume=${safeMusicVolume},afade=t=in:st=0:d=0.6[a]`,
       "-map", "[v]",
       "-map", "[a]",
       "-c:v", "libx264",
